@@ -48,7 +48,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen relative flex items-center justify-center p-6 overflow-hidden bg-[#020617]">
+    <main className="min-h-screen relative flex flex-col items-center justify-start py-20 px-6 overflow-x-hidden bg-[#020617] text-white">
       {/* Dynamic Background Elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/10 blur-[120px] rounded-full" />
@@ -87,7 +87,7 @@ export default function Home() {
                     </p>
                   </div>
                   <div className="p-3 bg-blue-500/10 rounded-2xl">
-                    <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
                     </svg>
                   </div>
@@ -119,7 +119,7 @@ export default function Home() {
                     </p>
                   </div>
                   <div className="p-3 bg-emerald-500/10 rounded-2xl">
-                    <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                     </svg>
                   </div>
@@ -151,7 +151,7 @@ export default function Home() {
               {loading ? (
                 <div className="w-4 h-4 border-2 border-slate-500 border-t-white rounded-full animate-spin" />
               ) : (
-                <svg className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="16" height="16">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               )}
@@ -160,22 +160,26 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col items-center gap-2">
-            {current?.localtimestamp && (
-              <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase flex items-center gap-2">
-                <span className="w-1 h-1 rounded-full bg-slate-700" />
-                Last updated: {new Date(current.localtimestamp).toLocaleTimeString()}
-              </p>
-            )}
+            <div className="min-h-[20px] flex items-center justify-center">
+              {current?.localtimestamp && (
+                <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase flex items-center gap-2">
+                  <span className="w-1 h-1 rounded-full bg-slate-700" />
+                  Last updated: {new Date(current.localtimestamp).toLocaleTimeString()}
+                </p>
+              )}
+            </div>
             
-            {syncResult && (
-              <div className={`mt-2 py-1 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider border animate-in slide-in-from-bottom-1 duration-500 ${
-                syncResult.success 
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                  : 'bg-red-500/10 border-red-500/20 text-red-400'
-              }`}>
-                {syncResult.success ? 'Success: Database Refreshed' : `Error: ${syncResult.error}`}
-              </div>
-            )}
+            <div className="min-h-[28px] flex items-center justify-center">
+              {syncResult && (
+                <div className={`mt-2 py-1 px-3 rounded-full text-[10px] font-bold uppercase tracking-wider border animate-in slide-in-from-bottom-1 duration-500 ${
+                  syncResult.success 
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                    : 'bg-red-500/10 border-red-500/20 text-red-400'
+                }`}>
+                  {syncResult.success ? 'Success: Database Refreshed' : `Error: ${syncResult.error}`}
+                </div>
+              )}
+            </div>
           </div>
         </footer>
       </div>

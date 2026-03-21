@@ -3,7 +3,8 @@ import { Sequelize } from 'sequelize';
 const useCloudDb = process.env.USE_CLOUD_DB === 'true';
 
 const dialectOptions: any = {
-  connectString: useCloudDb ? process.env.CLOUD_ORACLE_CONNECTION_STRING : process.env.ORACLE_CONNECTION_STRING
+  connectString: useCloudDb ? process.env.CLOUD_ORACLE_CONNECTION_STRING : process.env.ORACLE_CONNECTION_STRING,
+  autoCommit: true
 };
 
 if (useCloudDb && process.env.CLOUD_ORACLE_WALLET_DIR) {
@@ -20,9 +21,9 @@ const sequelize = new Sequelize({
   dialectOptions: dialectOptions,
   logging: process.env.NODE_ENV === 'development' ? console.log : false,
   pool: {
-    max: 5,
-    min: 0,
-    acquire: 30000,
+    max: 10,
+    min: 1,
+    acquire: 60000,
     idle: 10000
   }
 });

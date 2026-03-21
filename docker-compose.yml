@@ -1,0 +1,46 @@
+##############################################################################
+# WeatherAccess — STANDALONE mode
+#
+# Use this docker-compose only when running WeatherAccess WITHOUT the shared
+# Nginx proxy (e.g. local testing, or the only service on the server).
+#
+# For production with multiple services on one server, use the Proxy project:
+#   C:\Code\Proxy
+#
+# In standalone mode the app listens on HTTP 3000 (standard for Next.js).
+##############################################################################
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: weatheraccess:latest
+    container_name: weatheraccess-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - ORACLE_CONNECTION_STRING=${ORACLE_CONNECTION_STRING}
+      - USE_CLOUD_DB=${USE_CLOUD_DB}
+      - CLOUD_ORACLE_USER=${CLOUD_ORACLE_USER}
+      - CLOUD_ORACLE_PASSWORD=${CLOUD_ORACLE_PASSWORD}
+      - CLOUD_ORACLE_CONNECTION_STRING=${CLOUD_ORACLE_CONNECTION_STRING}
+      - CLOUD_ORACLE_WALLET_DIR=/app/oracle_wallet
+      - CLOUD_ORACLE_WALLET_PASSWORD=${CLOUD_ORACLE_WALLET_PASSWORD}
+      - ECOWITT_API_URL=${ECOWITT_API_URL}
+    volumes:
+      - ./oracle_wallet:/app/oracle_wallet:ro
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  default:
+    driver: bridge

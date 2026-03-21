@@ -1,31 +1,33 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../db';
 
-export class Station extends Model {
-  public id!: string;
-  public localtimestamp!: Date;
-  public externaltemperature!: number;
-  public internaltemperature!: number;
-  public feelslike!: number;
-  public apparenttemperature!: number;
-  public dewpoint!: number;
-  public externalhumidity!: number;
-  public internalhumidity!: number;
-  public internalpressureabs!: number;
-  public internalpressurerel!: number;
-  public windspeed!: number;
-  public windgust!: number;
-  public winddirection!: number;
-  public solarradiation!: number;
-  public uv!: number;
-  public rain!: number;
-  public eventrain!: number;
-  public dailyrain!: number;
-  public weeklyrain!: number;
-  public monthlyrain!: number;
-  public yearlyrain!: number;
-  public batterystatus!: number;
-  public origem!: number;
+export class Station extends Model {}
+
+export interface Station {
+  id: string;
+  localtimestamp: Date;
+  externaltemperature: number;
+  internaltemperature: number;
+  feelslike: number;
+  apparenttemperature: number;
+  dewpoint: number;
+  externalhumidity: number;
+  internalhumidity: number;
+  internalpressureabs: number;
+  internalpressurerel: number;
+  windspeed: number;
+  windgust: number;
+  winddirection: number;
+  solarradiation: number;
+  uv: number;
+  rain: number;
+  eventrain: number;
+  dailyrain: number;
+  weeklyrain: number;
+  monthlyrain: number;
+  yearlyrain: number;
+  batterystatus: number;
+  origem: number;
 }
 
 Station.init(
