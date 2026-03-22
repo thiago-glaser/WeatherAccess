@@ -13,12 +13,16 @@ export async function GET() {
 
     const plain = latest.get({ plain: true });
     
+    const localTs = plain.localtimestamp instanceof Date 
+      ? plain.localtimestamp.toLocaleTimeString('en-GB') // 24h format HH:MM:SS
+      : plain.localtimestamp;
+
     return NextResponse.json({
       success: true,
       data: {
         externaltemperature: plain.externaltemperature,
         internaltemperature: plain.internaltemperature,
-        localtimestamp: plain.localtimestamp,
+        localtimestamp: localTs,
       }
     });
   } catch (error: any) {

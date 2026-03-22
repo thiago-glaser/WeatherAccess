@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { Station } from './models/station';
+import sequelize from './db';
 import * as conversions from './conversions';
-import { Op } from 'sequelize';
+import { getWinnipegWallClock } from './conversions';
 
 export interface EcowittRealTimeResponse {
   data: {
@@ -112,18 +113,19 @@ export async function syncWeatherData() {
     }
 
     // 3. Convert data
-    const local_date = conversions.getUnixTimestampToDate(data.outdoor.temperature.time);
+    const realUtcDate = conversions.getUnixTimestampToDate(data.outdoor.temperature.time);
+    const wallClockDate = getWinnipegWallClock(realUtcDate);
     
     // Check if record exists
     const existing = await Station.findOne({
-      where: { localtimestamp: local_date }
+      where: { localtimestamp: wallClockDate }
     });
 
     if (!existing) {
-      console.log(`[${new Date().toLocaleString()}] Database: Creating record for timestamp ${local_date.toISOString()}...`);
+      console.log(`[${new Date().toLocaleString()}] Database: Creating record for timestamp ${wallClockDate.toISOString()}...`);
       await Station.create({
         id: uuidv4().replace(/-/g, '').toUpperCase().substring(0, 32),
-        localtimestamp: local_date,
+        localtimestamp: wallClockDate,
         externaltemperature: conversions.fahrenheitToCelsius(parseFloat(data.outdoor.temperature.value)),
         internaltemperature: conversions.fahrenheitToCelsius(parseFloat(data.indoor.temperature.value)),
         feelslike: conversions.fahrenheitToCelsius(parseFloat(data.outdoor.feels_like.value)),
@@ -146,7 +148,7 @@ export async function syncWeatherData() {
         yearlyrain: conversions.inchesToMillimeters(parseFloat(data.rainfall.yearly.value)),
         batterystatus: parseFloat(data.battery.sensor_array.value),
         origem: 0
-      }, { returning: false });
+      });
       console.log(`[${new Date().toLocaleString()}] Database: Record created successfully.`);
     } else {
       console.log(`[${new Date().toLocaleString()}] Database: Record already exists for this timestamp.`);
@@ -155,11 +157,121 @@ export async function syncWeatherData() {
     // 4. Cleanup
 /* Removed frequent cleanup to improve performance and prevent hangs */
 
-    return { success: true, timestamp: local_date };
+    return { success: true, timestamp: wallClockDate };
   } catch (error: any) {
-    console.error('Error syncing weather data:', error.message);
+    if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
+      console.error(`Sequelize ${error.name}:`, JSON.stringify(error.errors, null, 2));
+    } else {
+      console.error('Error syncing weather data:', error.message);
+    }
     throw error;
   }
+}
+
+/**
+ * Oracle-native MERGE upsert for a batch of STATION records.
+ *
+ * Sequelize's Model.upsert() appends a RETURNING clause to its generated
+ * MERGE statement. Oracle's oracledb driver cannot write TIMESTAMP values
+ * back into Node.js host variables, producing ORA-06502.
+ * This helper builds a hand-crafted MERGE with no RETURNING clause.
+ *
+ * Source rows are inlined as: SELECT <literals> FROM DUAL UNION ALL ...
+ * which is fully supported by Oracle for any reasonable batch size.
+ */
+async function oracleMergeUpsert(entries: any[]): Promise<void> {
+  if (entries.length === 0) return;
+
+  // Serialize a JS value to an Oracle SQL literal
+  const lit = (v: any): string => {
+    if (v === null || v === undefined) return 'NULL';
+    if (v instanceof Date) {
+      // Use the UTC wall-clock representation stored in the Date object
+      const iso = v.toISOString(); // e.g. '2026-03-21T23:45:00.000Z'
+      return `TO_TIMESTAMP('${iso}', 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')`;
+    }
+    if (typeof v === 'number') return isNaN(v) ? 'NULL' : String(v);
+    if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`;
+    return String(v);
+  };
+
+  // Build one SELECT ... FROM DUAL row per entry, aliased to avoid reserved words
+  const sourceRows = entries.map(e =>
+    `SELECT
+      ${lit(e.id)}                         AS ENTRY_ID,
+      ${lit(e.localtimestamp)}             AS LOCAL_TS,
+      ${lit(e.externaltemperature  ?? null)} AS EXT_TEMP,
+      ${lit(e.internaltemperature  ?? null)} AS INT_TEMP,
+      ${lit(e.feelslike            ?? null)} AS FEELS_LK,
+      ${lit(e.apparenttemperature  ?? null)} AS APP_TEMP,
+      ${lit(e.dewpoint             ?? null)} AS DEW_PT,
+      ${lit(e.externalhumidity     ?? null)} AS EXT_HUM,
+      ${lit(e.internalhumidity     ?? null)} AS INT_HUM,
+      ${lit(e.internalpressureabs  ?? null)} AS PRES_ABS,
+      ${lit(e.internalpressurerel  ?? null)} AS PRES_REL,
+      ${lit(e.windspeed            ?? null)} AS WIND_SPD,
+      ${lit(e.windgust             ?? null)} AS WIND_GST,
+      ${lit(e.winddirection        ?? null)} AS WIND_DIR,
+      ${lit(e.solarradiation       ?? null)} AS SOLAR,
+      ${lit(e.uv                   ?? null)} AS UV_VAL,
+      ${lit(e.rain                 ?? null)} AS RAIN_VAL,
+      ${lit(e.eventrain            ?? null)} AS EVT_RAIN,
+      ${lit(e.dailyrain            ?? null)} AS DAY_RAIN,
+      ${lit(e.weeklyrain           ?? null)} AS WK_RAIN,
+      ${lit(e.monthlyrain          ?? null)} AS MON_RAIN,
+      ${lit(e.yearlyrain           ?? null)} AS YR_RAIN,
+      ${lit(e.batterystatus        ?? null)} AS BATT,
+      ${lit(e.origem               ?? 1)}    AS ORIGEM_VAL
+    FROM DUAL`
+  ).join('\nUNION ALL\n');
+
+  const sql = `
+MERGE INTO STATION t
+USING (
+  ${sourceRows}
+) s
+ON (t.ID = s.ENTRY_ID)
+WHEN MATCHED THEN UPDATE SET
+  t."LOCALTIMESTAMP"    = s.LOCAL_TS,
+  t.EXTERNALTEMPERATURE = s.EXT_TEMP,
+  t.INTERNALTEMPERATURE = s.INT_TEMP,
+  t.FEELSLIKE           = s.FEELS_LK,
+  t.APPARENTTEMPERATURE = s.APP_TEMP,
+  t.DEWPOINT            = s.DEW_PT,
+  t.EXTERNALHUMIDITY    = s.EXT_HUM,
+  t.INTERNALHUMIDITY    = s.INT_HUM,
+  t.INTERNALPRESSUREABS = s.PRES_ABS,
+  t.INTERNALPRESSUREREL = s.PRES_REL,
+  t.WINDSPEED           = s.WIND_SPD,
+  t.WINDGUST            = s.WIND_GST,
+  t.WINDDIRECTION       = s.WIND_DIR,
+  t.SOLARRADIATION      = s.SOLAR,
+  t.UV                  = s.UV_VAL,
+  t.RAIN                = s.RAIN_VAL,
+  t.EVENTRAIN           = s.EVT_RAIN,
+  t.DAILYRAIN           = s.DAY_RAIN,
+  t.WEEKLYRAIN          = s.WK_RAIN,
+  t.MONTHLYRAIN         = s.MON_RAIN,
+  t.YEARLYRAIN          = s.YR_RAIN,
+  t.BATTERYSTATUS       = s.BATT,
+  t.ORIGEM              = s.ORIGEM_VAL
+WHEN NOT MATCHED THEN INSERT (
+  ID, "LOCALTIMESTAMP", EXTERNALTEMPERATURE, INTERNALTEMPERATURE,
+  FEELSLIKE, APPARENTTEMPERATURE, DEWPOINT, EXTERNALHUMIDITY,
+  INTERNALHUMIDITY, INTERNALPRESSUREABS, INTERNALPRESSUREREL,
+  WINDSPEED, WINDGUST, WINDDIRECTION, SOLARRADIATION, UV,
+  RAIN, EVENTRAIN, DAILYRAIN, WEEKLYRAIN, MONTHLYRAIN, YEARLYRAIN,
+  BATTERYSTATUS, ORIGEM
+) VALUES (
+  s.ENTRY_ID, s.LOCAL_TS, s.EXT_TEMP, s.INT_TEMP,
+  s.FEELS_LK, s.APP_TEMP, s.DEW_PT, s.EXT_HUM,
+  s.INT_HUM, s.PRES_ABS, s.PRES_REL,
+  s.WIND_SPD, s.WIND_GST, s.WIND_DIR, s.SOLAR, s.UV_VAL,
+  s.RAIN_VAL, s.EVT_RAIN, s.DAY_RAIN, s.WK_RAIN, s.MON_RAIN, s.YR_RAIN,
+  s.BATT, s.ORIGEM_VAL
+)`;
+
+  await sequelize.query(sql);
 }
 
 export async function syncHistoricData() {
@@ -181,12 +293,14 @@ export async function syncHistoricData() {
 
     let startDate: Date;
     if (lastRecord) {
+      // already a wall-clock Date
       startDate = new Date(lastRecord.localtimestamp.getTime() + 1000);
-      console.log(`Last record found at: ${lastRecord.localtimestamp.toISOString()}. New start date: ${startDate.toISOString()}`);
+      console.log(`Last record found at: ${lastRecord.localtimestamp.toISOString()} (Wall Clock). New start date: ${startDate.toISOString()}`);
     } else {
-      // Default to 6 hours ago if no records exist
-      startDate = new Date(Date.now() - 6 * 60 * 60 * 1000);
-      console.log(`No records found for ORIGEM=1. Using default start date: ${startDate.toISOString()}`);
+      // Default to 6 hours ago if no records exist, converted to wall-clock
+      const sixHoursAgoReal = new Date(Date.now() - 6 * 60 * 60 * 1000);
+      startDate = getWinnipegWallClock(sixHoursAgoReal);
+      console.log(`No records found for ORIGEM=1. Using default start date (Local Wall Clock): ${startDate.toISOString()}`);
     }
 
     // end_date = start_date + 6 hours - 1 second
@@ -194,8 +308,9 @@ export async function syncHistoricData() {
 
     // Synchronize with Ecowitt History API using the station's local time format as requested
     const formatDate = (date: Date) => {
+      // Assuming 'date' is already a wall-clock instant represented in UTC
       const pad = (n: number) => n.toString().padStart(2, '0');
-      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+      return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
     };
 
     const startStr = formatDate(startDate);
@@ -233,7 +348,7 @@ export async function syncHistoricData() {
       if (!timestampMap.has(ts)) {
         timestampMap.set(ts, {
           id: uuidv4().replace(/-/g, '').toUpperCase().substring(0, 32),
-          localtimestamp: conversions.getUnixTimestampToDate(ts),
+          localtimestamp: getWinnipegWallClock(conversions.getUnixTimestampToDate(ts)),
           origem: 1,
           batterystatus: 0
         });
@@ -277,47 +392,23 @@ export async function syncHistoricData() {
 
     console.log(`Prepared ${timestampMap.size} records for database sync.`);
 
-    // 3. Save all entries to the database efficiently
-    console.log(`Checking for existing records in range ${startDate.toISOString()} to ${endDate.toISOString()}...`);
-    const existingRecords = await Station.findAll({
-      where: {
-        localtimestamp: {
-          [Op.between]: [startDate, endDate]
-        },
-        origem: 1
-      }
-    });
+    // 3. Upsert via a single raw Oracle MERGE (no RETURNING clause, which
+    // triggers ORA-06502 in Sequelize's upsert() on TIMESTAMP columns).
+    const entries = Array.from(timestampMap.values());
+    const recordsProcessed = entries.length;
 
-    const existingMap = new Map<string, Station>();
-    for (const record of existingRecords) {
-      existingMap.set(record.localtimestamp.getTime().toString(), record);
+    if (recordsProcessed > 0) {
+      await oracleMergeUpsert(entries);
     }
 
-    let recordsProcessed = 0;
-    let createdCount = 0;
-    let updatedCount = 0;
-
-    for (const entryData of timestampMap.values()) {
-      const tsKey = entryData.localtimestamp.getTime().toString();
-      const existing = existingMap.get(tsKey);
-
-      if (existing) {
-        // Omit fixed fields from update to prevent PK or fixed info changes
-        const { id, localtimestamp, origem, ...updateData } = entryData;
-        await existing.update(updateData);
-        updatedCount++;
-      } else {
-        await Station.create(entryData);
-        createdCount++;
-      }
-      recordsProcessed++;
-      if (recordsProcessed % 50 === 0) console.log(`Sync progress: ${recordsProcessed}/${timestampMap.size} records...`);
-    }
-
-    console.log(`Sync completed successfully. ${recordsProcessed} records processed (${createdCount} created, ${updatedCount} updated).`);
+    console.log(`Sync completed successfully. ${recordsProcessed} records upserted.`);
     return { success: true, recordsProcessed };
   } catch (error: any) {
-    console.error('Error syncing historic weather data:', error.message);
+    if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
+      console.error(`Sequelize ${error.name}:`, JSON.stringify(error.errors, null, 2));
+    } else {
+      console.error('Error syncing historic weather data:', error.message);
+    }
     throw error;
   }
 }

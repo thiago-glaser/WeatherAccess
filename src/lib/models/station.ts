@@ -33,7 +33,7 @@ export interface Station {
 Station.init(
   {
     id: {
-      type: DataTypes.STRING,
+      type: DataTypes.STRING(32),
       primaryKey: true,
       field: 'ID',
     },
@@ -42,87 +42,87 @@ Station.init(
       field: 'LOCALTIMESTAMP',
     },
     externaltemperature: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'EXTERNALTEMPERATURE',
     },
     internaltemperature: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'INTERNALTEMPERATURE',
     },
     feelslike: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'FEELSLIKE',
     },
     apparenttemperature: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'APPARENTTEMPERATURE',
     },
     dewpoint: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'DEWPOINT',
     },
     externalhumidity: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'EXTERNALHUMIDITY',
     },
     internalhumidity: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'INTERNALHUMIDITY',
     },
     internalpressureabs: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'INTERNALPRESSUREABS',
     },
     internalpressurerel: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'INTERNALPRESSUREREL',
     },
     windspeed: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'WINDSPEED',
     },
     windgust: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'WINDGUST',
     },
     winddirection: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'WINDDIRECTION',
     },
     solarradiation: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'SOLARRADIATION',
     },
     uv: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'UV',
     },
     rain: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'RAIN',
     },
     eventrain: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'EVENTRAIN',
     },
     dailyrain: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'DAILYRAIN',
     },
     weeklyrain: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'WEEKLYRAIN',
     },
     monthlyrain: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'MONTHLYRAIN',
     },
     yearlyrain: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'YEARLYRAIN',
     },
     batterystatus: {
-      type: DataTypes.DECIMAL,
+      type: DataTypes.FLOAT,
       field: 'BATTERYSTATUS',
     },
     origem: {

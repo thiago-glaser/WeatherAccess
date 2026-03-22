@@ -25,11 +25,20 @@
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "next.config.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "check-cloud.ts",
+    "check-future.ts",
+    "check-local.ts",
+    "restore-db.ts",
+    "sync-local-to-cloud.ts",
+    "verify-sync-time.ts"
+  ]
 }

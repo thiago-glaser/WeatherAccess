@@ -164,7 +164,7 @@ export default function Home() {
               {current?.localtimestamp && (
                 <p className="text-[10px] text-slate-500 font-medium tracking-widest uppercase flex items-center gap-2">
                   <span className="w-1 h-1 rounded-full bg-slate-700" />
-                  Last updated: {new Date(current.localtimestamp).toLocaleTimeString()}
+                  Last updated: {current.localtimestamp}
                 </p>
               )}
             </div>
