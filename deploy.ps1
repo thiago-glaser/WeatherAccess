@@ -23,7 +23,8 @@ param(
     [string]$ImageName = "weatheraccess",
     [string]$Tag = "latest",
     [string]$RemoteDir = "~/WeatherAccess",
-    [switch]$SkipRuntimeFiles  # skip certs/wallet/env upload (already on server)
+    [switch]$SkipRuntimeFiles,  # skip certs/wallet/env upload (already on server)
+    [switch]$SkipLogs
 )
 
 $LocalDir = $PSScriptRoot
@@ -204,7 +205,7 @@ $ProxyDeployScript = "C:\code\proxy\deploy.ps1"
 
 if (Test-Path $ProxyDeployScript) {
     Write-Host "    Delegating to Proxy deployment script..." -ForegroundColor DarkGray
-    & $ProxyDeployScript -RemoteUser $RemoteUser -RemoteHost $RemoteHost -SshKeyPath $SshKeyPath -LogContainer weatheraccess-web
+    & $ProxyDeployScript -RemoteUser $RemoteUser -RemoteHost $RemoteHost -SshKeyPath $SshKeyPath -LogContainer weatheraccess-web -SkipLogs:$SkipLogs
     if ($LASTEXITCODE -ne 0) { Write-Fail "Proxy deploy failed"; exit 1 }
 }
 else {
