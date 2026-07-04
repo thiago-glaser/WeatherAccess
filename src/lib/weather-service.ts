@@ -4,86 +4,8 @@ import { Station } from './models/station';
 import sequelize from './db';
 import * as conversions from './conversions';
 import { getWinnipegWallClock } from './conversions';
-
-export interface EcowittRealTimeResponse {
-  data: {
-    outdoor: {
-      temperature: { value: string; time: string };
-      humidity: { value: string };
-      feels_like: { value: string };
-      app_temp: { value: string };
-      dew_point: { value: string };
-    };
-    indoor: {
-      temperature: { value: string };
-      humidity: { value: string };
-    };
-    pressure: {
-      absolute: { value: string };
-      relative: { value: string };
-    };
-    wind: {
-      wind_speed: { value: string };
-      wind_gust: { value: string };
-      wind_direction: { value: string };
-    };
-    solar_and_uvi: {
-      solar: { value: string };
-      uvi: { value: string };
-    };
-    rainfall: {
-      rain_rate: { value: string };
-      event: { value: string };
-      daily: { value: string };
-      weekly: { value: string };
-      monthly: { value: string };
-      yearly: { value: string };
-    };
-    battery: {
-      sensor_array: { value: string };
-    };
-  };
-}
-
-export interface EcowittHistoryResponse {
-  code: number;
-  msg: string;
-  time: string;
-  data: {
-    outdoor?: {
-      temperature?: { list: Record<string, string> };
-      humidity?: { list: Record<string, string> };
-      feels_like?: { list: Record<string, string> };
-      app_temp?: { list: Record<string, string> };
-      dew_point?: { list: Record<string, string> };
-    };
-    indoor?: {
-      temperature?: { list: Record<string, string> };
-      humidity?: { list: Record<string, string> };
-    };
-    pressure?: {
-      absolute?: { list: Record<string, string> };
-      relative?: { list: Record<string, string> };
-    };
-    wind?: {
-      wind_speed?: { list: Record<string, string> };
-      wind_gust?: { list: Record<string, string> };
-      wind_direction?: { list: Record<string, string> };
-    };
-    solar_and_uvi?: {
-      solar?: { list: Record<string, string> };
-      uvi?: { list: Record<string, string> };
-    };
-    rainfall?: {
-      rain_rate?: { list: Record<string, string> };
-      event?: { list: Record<string, string> };
-      daily?: { list: Record<string, string> };
-      weekly?: { list: Record<string, string> };
-      monthly?: { list: Record<string, string> };
-      yearly?: { list: Record<string, string> };
-    };
-  };
-}
+import { EcowittRealTimeResponse } from './EcowittRealTimeResponse';
+import { EcowittHistoryResponse } from './EcowittHistoryResponse';
 
 export async function syncWeatherData() {
   try {
@@ -115,7 +37,7 @@ export async function syncWeatherData() {
     // 3. Convert data
     const realUtcDate = conversions.getUnixTimestampToDate(data.outdoor.temperature.time);
     const wallClockDate = getWinnipegWallClock(realUtcDate);
-    
+
     // Check if record exists
     const existing = await Station.findOne({
       where: { localtimestamp: wallClockDate }
@@ -155,7 +77,7 @@ export async function syncWeatherData() {
     }
 
     // 4. Cleanup
-/* Removed frequent cleanup to improve performance and prevent hangs */
+    /* Removed frequent cleanup to improve performance and prevent hangs */
 
     return { success: true, timestamp: wallClockDate };
   } catch (error: any) {
@@ -168,111 +90,7 @@ export async function syncWeatherData() {
   }
 }
 
-/**
- * Oracle-native MERGE upsert for a batch of STATION records.
- *
- * Sequelize's Model.upsert() appends a RETURNING clause to its generated
- * MERGE statement. Oracle's oracledb driver cannot write TIMESTAMP values
- * back into Node.js host variables, producing ORA-06502.
- * This helper builds a hand-crafted MERGE with no RETURNING clause.
- *
- * Source rows are inlined as: SELECT <literals> FROM DUAL UNION ALL ...
- * which is fully supported by Oracle for any reasonable batch size.
- */
-async function oracleMergeUpsert(entries: any[]): Promise<void> {
-  if (entries.length === 0) return;
 
-  // Serialize a JS value to an Oracle SQL literal
-  const lit = (v: any): string => {
-    if (v === null || v === undefined) return 'NULL';
-    if (v instanceof Date) {
-      // Use the UTC wall-clock representation stored in the Date object
-      const iso = v.toISOString(); // e.g. '2026-03-21T23:45:00.000Z'
-      return `TO_TIMESTAMP('${iso}', 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')`;
-    }
-    if (typeof v === 'number') return isNaN(v) ? 'NULL' : String(v);
-    if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`;
-    return String(v);
-  };
-
-  // Build one SELECT ... FROM DUAL row per entry, aliased to avoid reserved words
-  const sourceRows = entries.map(e =>
-    `SELECT
-      ${lit(e.id)}                         AS ENTRY_ID,
-      ${lit(e.localtimestamp)}             AS LOCAL_TS,
-      ${lit(e.externaltemperature  ?? null)} AS EXT_TEMP,
-      ${lit(e.internaltemperature  ?? null)} AS INT_TEMP,
-      ${lit(e.feelslike            ?? null)} AS FEELS_LK,
-      ${lit(e.apparenttemperature  ?? null)} AS APP_TEMP,
-      ${lit(e.dewpoint             ?? null)} AS DEW_PT,
-      ${lit(e.externalhumidity     ?? null)} AS EXT_HUM,
-      ${lit(e.internalhumidity     ?? null)} AS INT_HUM,
-      ${lit(e.internalpressureabs  ?? null)} AS PRES_ABS,
-      ${lit(e.internalpressurerel  ?? null)} AS PRES_REL,
-      ${lit(e.windspeed            ?? null)} AS WIND_SPD,
-      ${lit(e.windgust             ?? null)} AS WIND_GST,
-      ${lit(e.winddirection        ?? null)} AS WIND_DIR,
-      ${lit(e.solarradiation       ?? null)} AS SOLAR,
-      ${lit(e.uv                   ?? null)} AS UV_VAL,
-      ${lit(e.rain                 ?? null)} AS RAIN_VAL,
-      ${lit(e.eventrain            ?? null)} AS EVT_RAIN,
-      ${lit(e.dailyrain            ?? null)} AS DAY_RAIN,
-      ${lit(e.weeklyrain           ?? null)} AS WK_RAIN,
-      ${lit(e.monthlyrain          ?? null)} AS MON_RAIN,
-      ${lit(e.yearlyrain           ?? null)} AS YR_RAIN,
-      ${lit(e.batterystatus        ?? null)} AS BATT,
-      ${lit(e.origem               ?? 1)}    AS ORIGEM_VAL
-    FROM DUAL`
-  ).join('\nUNION ALL\n');
-
-  const sql = `
-MERGE INTO STATION t
-USING (
-  ${sourceRows}
-) s
-ON (t.ID = s.ENTRY_ID)
-WHEN MATCHED THEN UPDATE SET
-  t."LOCALTIMESTAMP"    = s.LOCAL_TS,
-  t.EXTERNALTEMPERATURE = s.EXT_TEMP,
-  t.INTERNALTEMPERATURE = s.INT_TEMP,
-  t.FEELSLIKE           = s.FEELS_LK,
-  t.APPARENTTEMPERATURE = s.APP_TEMP,
-  t.DEWPOINT            = s.DEW_PT,
-  t.EXTERNALHUMIDITY    = s.EXT_HUM,
-  t.INTERNALHUMIDITY    = s.INT_HUM,
-  t.INTERNALPRESSUREABS = s.PRES_ABS,
-  t.INTERNALPRESSUREREL = s.PRES_REL,
-  t.WINDSPEED           = s.WIND_SPD,
-  t.WINDGUST            = s.WIND_GST,
-  t.WINDDIRECTION       = s.WIND_DIR,
-  t.SOLARRADIATION      = s.SOLAR,
-  t.UV                  = s.UV_VAL,
-  t.RAIN                = s.RAIN_VAL,
-  t.EVENTRAIN           = s.EVT_RAIN,
-  t.DAILYRAIN           = s.DAY_RAIN,
-  t.WEEKLYRAIN          = s.WK_RAIN,
-  t.MONTHLYRAIN         = s.MON_RAIN,
-  t.YEARLYRAIN          = s.YR_RAIN,
-  t.BATTERYSTATUS       = s.BATT,
-  t.ORIGEM              = s.ORIGEM_VAL
-WHEN NOT MATCHED THEN INSERT (
-  ID, "LOCALTIMESTAMP", EXTERNALTEMPERATURE, INTERNALTEMPERATURE,
-  FEELSLIKE, APPARENTTEMPERATURE, DEWPOINT, EXTERNALHUMIDITY,
-  INTERNALHUMIDITY, INTERNALPRESSUREABS, INTERNALPRESSUREREL,
-  WINDSPEED, WINDGUST, WINDDIRECTION, SOLARRADIATION, UV,
-  RAIN, EVENTRAIN, DAILYRAIN, WEEKLYRAIN, MONTHLYRAIN, YEARLYRAIN,
-  BATTERYSTATUS, ORIGEM
-) VALUES (
-  s.ENTRY_ID, s.LOCAL_TS, s.EXT_TEMP, s.INT_TEMP,
-  s.FEELS_LK, s.APP_TEMP, s.DEW_PT, s.EXT_HUM,
-  s.INT_HUM, s.PRES_ABS, s.PRES_REL,
-  s.WIND_SPD, s.WIND_GST, s.WIND_DIR, s.SOLAR, s.UV_VAL,
-  s.RAIN_VAL, s.EVT_RAIN, s.DAY_RAIN, s.WK_RAIN, s.MON_RAIN, s.YR_RAIN,
-  s.BATT, s.ORIGEM_VAL
-)`;
-
-  await sequelize.query(sql);
-}
 
 export async function syncHistoricData() {
   console.log('Starting syncHistoricData...');
@@ -392,13 +210,38 @@ export async function syncHistoricData() {
 
     console.log(`Prepared ${timestampMap.size} records for database sync.`);
 
-    // 3. Upsert via a single raw Oracle MERGE (no RETURNING clause, which
-    // triggers ORA-06502 in Sequelize's upsert() on TIMESTAMP columns).
+    // 3. Upsert via Station.bulkCreate with updateOnDuplicate for MySQL
     const entries = Array.from(timestampMap.values());
     const recordsProcessed = entries.length;
 
     if (recordsProcessed > 0) {
-      await oracleMergeUpsert(entries);
+      await Station.bulkCreate(entries, {
+        updateOnDuplicate: [
+          'localtimestamp',
+          'externaltemperature',
+          'internaltemperature',
+          'feelslike',
+          'apparenttemperature',
+          'dewpoint',
+          'externalhumidity',
+          'internalhumidity',
+          'internalpressureabs',
+          'internalpressurerel',
+          'windspeed',
+          'windgust',
+          'winddirection',
+          'solarradiation',
+          'uv',
+          'rain',
+          'eventrain',
+          'dailyrain',
+          'weeklyrain',
+          'monthlyrain',
+          'yearlyrain',
+          'batterystatus',
+          'origem'
+        ]
+      });
     }
 
     console.log(`Sync completed successfully. ${recordsProcessed} records upserted.`);
