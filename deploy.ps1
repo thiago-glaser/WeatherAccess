@@ -12,7 +12,7 @@
 .EXAMPLE (fastest deploy - uses defaults)
     .\deploy.ps1
 
-.EXAMPLE (skip re-uploading certs/wallet/env - faster redeploy when only code changed)
+.EXAMPLE (skip re-uploading env - faster redeploy when only code changed)
     .\deploy.ps1 -SkipRuntimeFiles
 #>
 param(
@@ -22,7 +22,7 @@ param(
     [string]$ImageName = "weatheraccess",
     [string]$Tag = "latest",
     [string]$RemoteDir = "~/WeatherAccess",
-    [switch]$SkipRuntimeFiles,  # skip certs/wallet/env upload (already on server)
+    [switch]$SkipRuntimeFiles,  # skip env upload (already on server)
     [switch]$SkipLogs
 )
 
@@ -120,7 +120,7 @@ Write-OK "SSH connection verified"
 Write-Step "Step 1 - Create remote directory structure"
 # ============================================================
 
-Invoke-SSH "mkdir -p $RemoteDir/oracle_wallet"
+Invoke-SSH "mkdir -p $RemoteDir"
 if ($LASTEXITCODE -ne 0) { Write-Fail "Cannot create remote dirs. Check SSH access."; exit 1 }
 Write-OK "Remote directories ready"
 
@@ -136,33 +136,10 @@ if (-not $SkipRuntimeFiles) {
     Invoke-SCP -Src $envFile -Dst "$RemoteDir/"
     if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to upload .env"; exit 1 }
     Write-OK ".env uploaded"
-
-    Write-Step "Step 3 - Upload Oracle Wallet (Compressed)"
-    $walletDir = "oracle_wallet"
-    $localWalletPath = Join-Path $LocalDir $walletDir
-    if (Test-Path $localWalletPath) {
-        $tempWalletArchive = Join-Path $env:TEMP "oracle_wallet_weather.tar.gz"
-        $remoteWalletArchive = "/tmp/oracle_wallet_weather.tar.gz"
-
-        Write-Host "    Archiving Oracle wallet..." -ForegroundColor DarkGray
-        & tar -czf $tempWalletArchive -C $LocalDir $walletDir
-        if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to archive Oracle wallet"; exit 1 }
-
-        Write-Host "    Uploading Oracle wallet archive..." -ForegroundColor DarkGray
-        Invoke-SCP -Src $tempWalletArchive -Dst $remoteWalletArchive
-        if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to upload Oracle wallet archive"; exit 1 }
-
-        Write-Host "    Extracting Oracle wallet on server..." -ForegroundColor DarkGray
-        Invoke-SSH "tar -xzf $remoteWalletArchive -C $RemoteDir && rm -f $remoteWalletArchive"
-        if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to extract Oracle wallet on server"; exit 1 }
-
-        Remove-Item $tempWalletArchive -Force
-        Write-OK "Oracle wallet uploaded and extracted"
-    }
 }
 
 # ============================================================
-Write-Step "Step 4 - Upload source code for server-side build"
+Write-Step "Step 3 - Upload source code for server-side build"
 # ============================================================
 
 $SrcDir = $RemoteDir + "/src"
@@ -174,7 +151,6 @@ $excludes = @(
     "--exclude=node_modules",
     "--exclude=.next",
     "--exclude=.git",
-    "--exclude=oracle_wallet",
     "--exclude=.env*"
 )
 & tar -czf $localTar @excludes -C $LocalDir .
@@ -187,7 +163,7 @@ Remove-Item $localTar -Force
 Write-OK "Archive uploaded"
 
 # ============================================================
-Write-Step "Step 5 - Build Docker image on server"
+Write-Step "Step 4 - Build Docker image on server"
 # ============================================================
 
 $buildCmd = "set -e" +
@@ -202,7 +178,7 @@ if ($LASTEXITCODE -ne 0) { Write-Fail "Remote docker build failed"; exit 1 }
 Write-OK "Image built on server: ${ImageName}:${Tag}"
 
 # ============================================================
-Write-Step "Step 6 - Start container via Proxy Deploy"
+Write-Step "Step 5 - Start container via Proxy Deploy"
 # ============================================================
 
 $ProxyDeployScript = "C:\code\proxy\deploy.ps1"

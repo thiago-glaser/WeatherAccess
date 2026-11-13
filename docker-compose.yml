@@ -26,21 +26,10 @@ services:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - ORACLE_USER=${ORACLE_USER}
-      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
-      - ORACLE_CONNECTION_STRING=${ORACLE_CONNECTION_STRING}
-      - USE_CLOUD_DB=${USE_CLOUD_DB}
-      - CLOUD_ORACLE_USER=${CLOUD_ORACLE_USER}
-      - CLOUD_ORACLE_PASSWORD=${CLOUD_ORACLE_PASSWORD}
-      - CLOUD_ORACLE_CONNECTION_STRING=${CLOUD_ORACLE_CONNECTION_STRING}
-      - CLOUD_ORACLE_WALLET_DIR=/app/oracle_wallet
-      - CLOUD_ORACLE_WALLET_PASSWORD=${CLOUD_ORACLE_WALLET_PASSWORD}
       - ECOWITT_API_URL=${ECOWITT_API_URL}
-    volumes:
-      - ./oracle_wallet:/app/oracle_wallet:ro
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000" ]
+      test: [ "CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r => process.exit(r.status ? 0 : 1)).catch(() => process.exit(1))" ]
       interval: 30s
       timeout: 10s
       retries: 3
