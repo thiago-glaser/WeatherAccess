@@ -5,21 +5,20 @@
 
 .EXAMPLE (full deploy - uploads source + builds on server)
     .\deploy.ps1 `
-      -RemoteUser <ssh-user> `
-      -RemoteHost <server-hostname> `
-      -SshKeyPath "<path-to-ssh-key>"
+      -RemoteUser ubuntu `
+      -RemoteHost deliverytrips.com `
+      -SshKeyPath "C:\Users\thiag\.ssh\deploy_deliverytrips.com.key"
+
+.EXAMPLE (fastest deploy - uses defaults)
+    .\deploy.ps1
 
 .EXAMPLE (skip re-uploading certs/wallet/env - faster redeploy when only code changed)
-    .\deploy.ps1 `
-      -RemoteUser <ssh-user> `
-      -RemoteHost <server-hostname> `
-      -SshKeyPath "<path-to-ssh-key>" `
-      -SkipRuntimeFiles
+    .\deploy.ps1 -SkipRuntimeFiles
 #>
 param(
-    [Parameter(Mandatory)][string]$RemoteUser,
-    [Parameter(Mandatory)][string]$RemoteHost,
-    [Parameter(Mandatory)][string]$SshKeyPath,
+    [string]$RemoteUser = "ubuntu",
+    [string]$RemoteHost = "deliverytrips.com",
+    [string]$SshKeyPath = "$env:USERPROFILE\.ssh\deploy_deliverytrips.com.key",
     [string]$ImageName = "weatheraccess",
     [string]$Tag = "latest",
     [string]$RemoteDir = "~/WeatherAccess",
@@ -86,11 +85,16 @@ $script:LocalKeyPath = Join-Path $sshDir $safeKeyName
 
 if (-not (Test-Path $sshDir)) { New-Item -ItemType Directory -Path $sshDir | Out-Null }
 
-if (Test-Path $script:LocalKeyPath) {
-    icacls $script:LocalKeyPath /grant:r "${env:USERNAME}:(F)" | Out-Null
+$resolvedSrc = if (Test-Path $SshKeyPath) { (Resolve-Path $SshKeyPath).Path } else { $SshKeyPath }
+$resolvedDst = if (Test-Path $script:LocalKeyPath) { (Resolve-Path $script:LocalKeyPath).Path } else { $script:LocalKeyPath }
+
+if ($resolvedSrc -ne $resolvedDst) {
+    if (Test-Path $script:LocalKeyPath) {
+        icacls $script:LocalKeyPath /grant:r "${env:USERNAME}:(F)" | Out-Null
+    }
+    Copy-Item -Path $SshKeyPath -Destination $script:LocalKeyPath -Force
+    icacls $script:LocalKeyPath /inheritance:r /grant:r "${env:USERNAME}:(R)" | Out-Null
 }
-Copy-Item -Path $SshKeyPath -Destination $script:LocalKeyPath -Force
-icacls $script:LocalKeyPath /inheritance:r /grant:r "${env:USERNAME}:(R)" | Out-Null
 Write-OK "Key staged at ~/.ssh/$safeKeyName"
 
 # Pre-flight: verify SSH works
